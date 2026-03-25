@@ -1,0 +1,12 @@
+--xử lý dữ liệu
+pandas
+re
+numpy
+json
+-- kết nối minio s3
+boto3
+-- kết nối airflow
+DAG
+sys
+os
+
