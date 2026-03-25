@@ -1,0 +1,394 @@
+pandas
+boto3
+numpy
+
+# import pandas as pd
+# import re
+# import json
+# import boto3
+# import numpy as np
+# from io import StringIO
+
+# # ==========================================
+# # 1. CẤU HÌNH KẾT NỐI MINIO S3
+# # ==========================================
+# S3_ENDPOINT = "http://minio:9000"
+# S3_ACCESS_KEY = "minioadmin"
+# S3_SECRET_KEY = "minioadmin"
+# BUCKET_BRONZE = "bronze"
+# BUCKET_SILVER = "silver"
+
+# s3_client = boto3.client(
+#     's3',
+#     endpoint_url=S3_ENDPOINT,
+#     aws_access_key_id=S3_ACCESS_KEY,
+#     aws_secret_access_key=S3_SECRET_KEY
+# )
+
+# def read_json_s3(key):
+#     obj = s3_client.get_object(Bucket=BUCKET_BRONZE, Key=key)
+#     return json.loads(obj['Body'].read().decode('utf-8'))
+
+# def write_csv_s3(df, key):
+#     csv_buffer = StringIO()
+#     df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+#     s3_client.put_object(Bucket=BUCKET_SILVER, Key=key, Body=csv_buffer.getvalue())
+
+# # ==========================================
+# # 2. CÁC HÀM XỬ LÝ (HELPER FUNCTIONS)
+# # ==========================================
+# def loai_bo_dau_tieng_viet(s):
+#     accents = {
+#         'a': 'áàảãạăắằẳẵặâấầẩẫậ', 'A': 'ÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬ', 'd': 'đ', 'D': 'Đ',
+#         'e': 'éèẻẽẹêếềểễệ', 'E': 'ÉÈẺẼẸÊẾỀỂỄỆ', 'i': 'íìỉĩị', 'I': 'ÍÌỈĨỊ',
+#         'o': 'óòỏõọôốồổỗộơớờởỡợ', 'O': 'ÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢ',
+#         'u': 'úùủũụưứừửữự', 'U': 'ÚÙỦŨỤƯỨỪỬỮỰ', 'y': 'ýỳỷỹỵ', 'Y': 'ÝỲỶỸỊ'
+#     }
+#     for char_non_accent, chars_accent in accents.items():
+#         for char in chars_accent:
+#             s = s.replace(char, char_non_accent)
+#     return s
+
+# def tao_id_giangvien(row):
+#     name = re.sub(r'^(GS\.TSKH\.|GS\.TS\.|PGS\.TS\.|TS\.|ThS\.|Ths\.|CN\.|KS\.|BS\.)\s*', '', str(row["Họ và tên"]))
+#     name_no_accent = loai_bo_dau_tieng_viet(name)
+#     initials = ''.join([w[0].upper() for w in name_no_accent.split()])
+#     dob = str(row["Năm sinh"]).replace("/", "") if pd.notna(row["Năm sinh"]) else "000000"
+#     stt = str(row["STT người"])
+#     file_match = re.findall(r'\d+', str(row["File"]))
+#     file_num = file_match[0] if file_match else "0"
+#     return f"{initials}{dob}{stt}f{file_num}"
+
+# def thongtinchung(raw_text):
+#     if not isinstance(raw_text, str) or not raw_text.strip(): return pd.DataFrame()
+#     text = re.sub(r"\s+", " ", raw_text.replace("\n", " ").replace("\t", " ")).strip()
+#     data = {}
+#     def clean_val(val):
+#         if val is None: return None
+#         val = val.strip(" ;:.").strip()
+#         return val if val else None
+#     def get_value(pattern, text):
+#         match = re.search(pattern, text, flags=re.IGNORECASE)
+#         return clean_val(match.group(1)) if match else None
+
+#     stop_after_linhvuc = r"(?=\s*(?:Ngoại\s*ngữ|Ngoạingữ|Địa\s*chỉ\s*liên\s*hệ|Điện\s*thoại|Mobile|Email)\s*:|$)"
+#     stop_after_ngoaingu = r"(?=\s*(?:Địa\s*chỉ\s*liên\s*hệ|Điện\s*thoại|Mobile|Email)\s*:|$)"
+#     stop_after_diachi = r"(?=\s*(?:Điện\s*thoại|Mobile|Email)\s*:|$)"
+#     stop_after_chucvu = r"(?=\s*(?:Học\s*vị|Dạy\s*CN|Lĩnh\s*vực\s*NC|Ngoại\s*ngữ|Ngoạingữ|Địa\s*chỉ\s*liên\s*hệ|Điện\s*thoại|Mobile|Email)\s*:|$)"
+
+#     data["Họ và tên"] = get_value(r"Họ\s*và\s*tên\s*:?\s*(.*?)(?=\s*Giới\s*tính\s*:|$)", text)
+#     data["Giới tính"] = get_value(r"Giới\s*tính\s*:?\s*(.*?)(?=\s*Năm\s*sinh\s*:|$)", text)
+#     data["Năm sinh"] = get_value(r"Năm\s*sinh\s*:?\s*(.*?)(?=\s*(?:Nơi\s*sinh|Nơisinh)\s*:|$)", text)
+#     data["Nơi sinh"] = get_value(r"(?:Nơi\s*sinh|Nơisinh)\s*:?\s*(.*?)(?=\s*(?:Quê\s*quán|Quêquán)\s*:|$)", text)
+#     data["Quê quán"] = get_value(r"(?:Quê\s*quán|Quêquán)\s*:?\s*(.*?)(?=\s*Tốt\s*nghiệp\s*ĐH\s*chuyên\s*ngành\s*:|$)", text)
+    
+#     block_dh = get_value(r"Tốt\s*nghiệp\s*ĐH\s*chuyên\s*ngành\s*:?\s*(.*?)(?=\s*(?:Đơn\s*vị\s*công\s*tác|Đơnvịcôngtác)\s*:|$)", text)
+#     data["Tốt nghiệp ĐH chuyên ngành"] = None; data["Tại_ĐH"] = None
+#     if block_dh:
+#         data["Tốt nghiệp ĐH chuyên ngành"] = get_value(r"^(.*?)(?=;\s*Tại\s*:|$)", block_dh)
+#         data["Tại_ĐH"] = get_value(r";\s*Tại\s*:?\s*(.*)$", block_dh)
+
+#     donvi = get_value(r"(?:Đơn\s*vị\s*công\s*tác|Đơnvịcôngtác)\s*:?\s*(.*?)(?=\s*Chức\s*vụ\s*:|\s*Học\s*vị\s*:|\s*Dạy\s*CN\s*:|\s*Lĩnh\s*vực\s*NC\s*:|\s*Ngoại\s*ngữ\s*:|\s*Ngoạingữ\s*:|\s*Địa\s*chỉ\s*liên\s*hệ\s*:|\s*Điện\s*thoại\s*:|\s*Mobile\s*:|\s*Email\s*:|$)", text)
+#     data["Đơn vị công tác"] = donvi; data["Khoa"] = None; data["Trường/Cơ quan"] = None
+#     if donvi:
+#         parts = [x.strip() for x in donvi.split(";")]
+#         if len(parts) >= 1: data["Khoa"] = clean_val(parts[0])
+#         if len(parts) >= 2: data["Trường/Cơ quan"] = clean_val(";".join(parts[1:]))
+
+#     data["Chức vụ"] = get_value(rf"Chức\s*vụ\s*:?\s*(.*?){stop_after_chucvu}", text)
+#     block_hocvi = get_value(r"Học\s*vị\s*:?\s*(.*?)(?=\s*Dạy\s*CN\s*:|\s*Lĩnh\s*vực\s*NC\s*:|\s*Ngoại\s*ngữ\s*:|\s*Ngoạingữ\s*:|\s*Địa\s*chỉ\s*liên\s*hệ\s*:|\s*Điện\s*thoại\s*:|\s*Mobile\s*:|\s*Email\s*:|$)", text)
+#     data["Học vị"] = None; data["năm"] = None; data["Chuyên ngành"] = None; data["Tại_Học vị"] = None
+#     if block_hocvi:
+#         data["Học vị"] = get_value(r"^(.*?)(?=;\s*năm\s*:|;\s*Chuyên\s*ngành\s*:|;\s*Tại\s*:|$)", block_hocvi)
+#         data["năm"] = get_value(r";\s*năm\s*:?\s*(.*?)(?=;\s*Chuyên\s*ngành\s*:|;\s*Tại\s*:|$)", block_hocvi)
+#         data["Chuyên ngành"] = get_value(r";\s*Chuyên\s*ngành\s*:?\s*(.*?)(?=;\s*Tại\s*:|$)", block_hocvi)
+#         data["Tại_Học vị"] = get_value(r";\s*Tại\s*:?\s*(.*?)(?=\s*(?:Dạy\s*CN|Lĩnh\s*vực\s*NC|Ngoại\s*ngữ|Ngoạingữ|Địa\s*chỉ\s*liên\s*hệ|Điện\s*thoại|Mobile|Email)\s*:|$)", block_hocvi)
+
+#     data["Dạy CN"] = get_value(r"Dạy\s*CN\s*:?\s*(.*?)(?=\s*Lĩnh\s*vực\s*NC\s*:|\s*(?:Ngoại\s*ngữ|Ngoạingữ)\s*:|\s*Địa\s*chỉ\s*liên\s*hệ\s*:|\s*Điện\s*thoại\s*:|\s*Mobile\s*:|\s*Email\s*:|$)", text)
+#     linhvuc_match = re.search(rf"Lĩnh\s*vực\s*NC\s*:?\s*(.*?){stop_after_linhvuc}", text, flags=re.IGNORECASE)
+#     data["Lĩnh vực NC"] = clean_val(linhvuc_match.group(1)) if linhvuc_match else None
+#     data["Ngoại ngữ"] = get_value(rf"(?:Ngoại\s*ngữ|Ngoạingữ)\s*:?\s*(.*?){stop_after_ngoaingu}", text)
+#     data["Địa chỉ liên hệ"] = get_value(rf"Địa\s*chỉ\s*liên\s*hệ\s*:?\s*(.*?){stop_after_diachi}", text)
+#     data["Điện thoại"] = get_value(r"Điện\s*thoại\s*:?\s*(.*?)(?=\s*Mobile\s*:|\s*Email\s*:|$)", text)
+#     data["Mobile"] = get_value(r"Mobile\s*:?\s*(.*?)(?=\s*Email\s*:|$)", text)
+#     data["Email"] = get_value(r"Email\s*:?\s*(.*)$", text)
+#     return pd.DataFrame([data])
+
+# def caccongtrinhkhoahoc(raw_text):
+#     projects = re.split(r'\[\d+\]', raw_text)
+#     projects = [p.strip() for p in projects if p.strip()]
+#     all_data = []
+#     for project in projects:
+#         item = {"Đề tài cấp": None, "Tên đề tài": None, "Chủ nhiệm": None, "Thành viên": None, "Mã số": None, "Năm": None}
+#         match_title = re.search(r'([^:]+):\s*(.*?)(?=\.\s*(Chủ nhiệm|Chủnhiệm|Thành viên|Thànhviên|Mã số|Mãsố)|$)', project)
+#         if match_title:
+#             item["Đề tài cấp"] = match_title.group(1).strip()
+#             item["Tên đề tài"] = match_title.group(2).strip()
+#         match_cn = re.search(r'Chủ\s*nhiệm\s*:\s*(.*?)(?=\.\s*(Thành viên|Thànhviên|Tham gia|Mã số|Mãsố|Năm)|$)', project)
+#         if match_cn: item["Chủ nhiệm"] = match_cn.group(1).strip()
+#         match_tv = re.search(r'(Thành viên|Thànhviên|Tham gia)\s*:\s*(.*?)(?=\.\s*(Mã số|Mãsố|Năm)|$)', project)
+#         if match_tv: item["Thành viên"] = match_tv.group(2).strip()
+#         match_ms = re.search(r'(Mã số|Mãsố)\s*:\s*(.*?)(?=\.\s*Năm|$)', project)
+#         if match_ms: item["Mã số"] = match_ms.group(2).strip()
+#         match_year = re.search(r'Năm\s*:\s*(\d{4})', project)
+#         if match_year: item["Năm"] = match_year.group(1)
+#         all_data.append(item)
+#     return pd.DataFrame(all_data)
+
+# def baibao(text):
+#     text = re.sub(r"\s+", " ", text.replace("\n", " ")).strip()
+#     rows = []
+#     pattern = r"\[/Images/icon_star_purple\.gif\]\s*(TRONG\s*NƯỚC|QUỐC\s*TẾ)\s*:\s*(.*?)(?=\[/Images/icon_star_purple\.gif\]\s*(TRONG\s*NƯỚC|QUỐC\s*TẾ)\s*:|$)"
+#     matches = re.finditer(pattern, text, re.I | re.DOTALL)
+#     for match in matches:
+#         loai = match.group(1).upper(); block = match.group(2)
+#         items = re.split(r"\[\d+\]", block)
+#         for item in items:
+#             item = item.strip()
+#             if not item: continue
+#             m_title = re.search(r"(?:Bài\s*báo|Article|Presentations|Tham luận)\s*:\s*(.*?)(?=\s*(?:Tác\s*giả|Authors?)\s*:)", item, re.I)
+#             title = m_title.group(1).strip(" .;-") if m_title else ""
+#             m_year = re.search(r"(?:Năm|Year)\s*[: ]\s*([12]\d{3})", item, re.I)
+#             year = m_year.group(1) if m_year else ""
+#             rows.append({"Loại bài báo": loai, "Tên bài báo": title, "Năm": year})
+#     return pd.DataFrame(rows)
+
+# def giangdaysaudaihoc(raw_text):
+#     raw_text = re.sub(r"SttHọ và Tên,.*Bảo vệ năm", "", raw_text)
+#     raw_text = re.sub(r"\s+", " ", raw_text.replace("\n", " ")).strip()
+#     items = [it.strip() for it in re.split(r"\[\d+\]", raw_text) if it.strip()]
+#     rows = []
+#     for it in items:
+#         row = {"Tên đề tài": "", "Trình độ": "", "Cơ sở đào tạo": "", "Năm hướng dẫn": "", "Bảo vệ năm": ""}
+#         name_match = re.search(r"^(.*?)(?=\s*Đề tài:)", it)
+#         if name_match: row["Họ và Tên sinh viên"] = name_match.group(1).strip()
+#         topic_match = re.search(r"Đề tài:\s*(.*?)(?=\s*(?:Trình độ:|Trách nhiệm:|Tiến sĩ|Thạc sĩ))", it)
+#         if topic_match: row["Tên đề tài"] = topic_match.group(1).strip(" ,.")
+#         level_match = re.search(r"(Tiến sĩ|Thạc sĩ)", it)
+#         if level_match: row["Trình độ"] = level_match.group(1)
+#         years = re.findall(r"\b(\d{4})\b", it)
+#         if len(years) >= 2: row["Năm hướng dẫn"] = years[-2]; row["Bảo vệ năm"] = years[-1]
+#         elif len(years) == 1: row["Năm hướng dẫn"] = years[0]
+#         school_match = re.search(r"(?:Tiến sĩ|Thạc sĩ)\s*(.*?)(?=\s*\d{4})", it)
+#         if school_match: row["Cơ sở đào tạo"] = school_match.group(1).strip(" ,.")
+#         rows.append(row)
+#     return pd.DataFrame(rows)
+
+# def sach(raw_text):
+#     raw_text = re.sub(r"\s+", " ", raw_text.replace("\n", " ")).strip()
+#     items = [it.strip() for it in re.split(r"\[\d+\]", raw_text) if it.strip()]
+#     rows = []
+#     for it in items:
+#         it = re.sub(r"^https?://\S+\s*", "", it).strip()
+#         m_title = re.search(r"^(.*?)(?=\s*(?:Chủ\s*biên:|Authors?:|Nơi\s*XB:|Năm\s*[12]\d{3})|$)", it, flags=re.IGNORECASE)
+#         title = m_title.group(1).strip(" ,.-") if m_title else ""
+#         m_nxb = re.search(r"Nơi\s*XB:\s*(.*?)(?=\s*Năm\s*[12]\d{3}|$)", it, flags=re.IGNORECASE)
+#         nxb = m_nxb.group(1).strip(" ,.-") if m_nxb else ""
+#         m_year = re.search(r"Năm\s*([12]\d{3})", it, flags=re.IGNORECASE)
+#         year = m_year.group(1) if m_year else ""
+#         rows.append({"Tên sách/Giáo trình": title, "Nơi XB": nxb, "Năm": year})
+#     return pd.DataFrame(rows)
+
+# def mongiangday(raw_text):
+#     raw_text = re.sub(r"\s+", " ", raw_text.replace("\n", " ")).strip()
+#     raw_text = re.sub(r"^SttTên mônNăm bắt đầuĐối tượngNơi dạy", "", raw_text).strip()
+#     items = re.split(r"\[(\d+)\]", raw_text)
+#     rows = []
+#     for i in range(1, len(items), 2):
+#         item = items[i + 1].strip()
+#         row = {"Tên môn": "", "Ngành": "", "Năm bắt đầu": "", "Đối tượng": "", "Nơi dạy": ""}
+#         m_ten = re.search(r"^(.*?)(?=Ngành\s*:)", item, flags=re.IGNORECASE)
+#         if m_ten: row["Tên môn"] = m_ten.group(1).strip(" ,.-")
+#         m_nganh = re.search(r"Ngành\s*:\s*(.*?)(?=\s+[12]\d{3}\b)", item, flags=re.IGNORECASE)
+#         if m_nganh: row["Ngành"] = m_nganh.group(1).strip(" ,.-")
+#         m_nam = re.search(r"\b([12]\d{3})\b", item)
+#         if m_nam: row["Năm bắt đầu"] = m_nam.group(1)
+#         tail = item[m_nam.end():].strip() if m_nam else ""
+#         m_noiday = re.search(r"(Trường.*)$", tail, flags=re.IGNORECASE)
+#         if m_noiday:
+#             row["Nơi dạy"] = m_noiday.group(1).strip(" ,.-")
+#             row["Đối tượng"] = tail[:m_noiday.start()].strip(" ,.-")
+#         else: row["Đối tượng"] = tail.strip(" ,.-")
+#         rows.append(row)
+#     return pd.DataFrame(rows)
+
+# def giaithuong(raw_text):
+#     if not isinstance(raw_text, str) or not raw_text.strip(): return pd.DataFrame(columns=["Tên giải thưởng","Lĩnh vực","Năm nhận","Nơi cấp"])
+#     text = re.sub(r"\s+", " ", raw_text.replace("\n", " ")).strip()
+#     text = re.sub(r"^SttTênLĩnh vựcNăm nhậnSốNơi cấp", "", text, flags=re.I)
+#     text = re.sub(r'(viagra|coupon|discount|abortion|prescription|drug|pharmacy|walgreens).*?', ' ', text, flags=re.I)
+#     linh_vuc_list = ["Chưa xác định","Kinh tế","Môi trường","Giáo dục","Khoa học","Khác","Ngôn ngữ","Y - Dược","Tự nhiên","Khoa học công nghệ","Công nghệ thông tin","Xã hội nhân văn","Kỹ thuật"]
+#     linh_vuc_pattern = "|".join(sorted(map(re.escape, linh_vuc_list), key=len, reverse=True))
+#     items = re.split(r"\[\d+\]", text)
+#     rows = []
+#     for item in items:
+#         item = item.strip()
+#         if not item: continue
+#         row = {"Tên giải thưởng": None, "Lĩnh vực": None, "Năm nhận": None, "Nơi cấp": None}
+#         m = re.search(rf"^(.*?)\s+({linh_vuc_pattern})\s+([12]\d{{3}})\s+(\d+)\s+(.*)$", item, flags=re.I)
+#         if m:
+#             row["Tên giải thưởng"] = m.group(1).strip(" ,.;-\"'")
+#             row["Lĩnh vực"] = m.group(2); row["Năm nhận"] = m.group(3)
+#             row["Nơi cấp"] = (m.group(4) + " " + m.group(5)).strip(" ,.;-\"'")
+#         else:
+#             m2 = re.search(rf"^(.*?)\s+({linh_vuc_pattern})\s+([12]\d{{3}})\s+(.*)$", item, flags=re.I)
+#             if m2:
+#                 row["Tên giải thưởng"] = m2.group(1).strip(" ,.;-\"'"); row["Lĩnh vực"] = m2.group(2)
+#                 row["Năm nhận"] = m2.group(3); row["Nơi cấp"] = m2.group(4).strip(" ,.;-\"'")
+#             else: row["Tên giải thưởng"] = item.strip(" ,.;-\"'")
+#         if row["Nơi cấp"]: row["Nơi cấp"] = re.sub(r'\[.*$', '', row["Nơi cấp"]).strip()
+#         rows.append(row)
+#     return pd.DataFrame(rows)
+
+# def khenthuong(raw_text):
+#     raw_text = re.sub(r"\s+", " ", raw_text.replace("\n", " ")).strip()
+#     parts = re.split(r"\[\d+\]", raw_text)
+#     data = [p.strip() for p in parts if p.strip()]
+#     return pd.DataFrame(data, columns=["Nội dung khen thưởng"])
+
+# def idcot(df, prefix, col_name):
+#     df[col_name] = [prefix + str(i+1).zfill(6) for i in range(len(df))]
+#     return df
+
+# def xoakhoangtrang(df):
+#     return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+
+# # ==========================================
+# # 3. PIPELINE CHÍNH (MAIN ETL)
+# # ==========================================
+# def main_etl():
+#     all_df_thongtinchung = []
+#     all_df_khoahoc = []
+#     all_df_baibao = []
+#     all_df_giangdaysaudaihoc = []
+#     all_df_sach = []
+#     all_df_mongiangday = []
+#     all_df_giaithuong = []
+#     all_df_khenthuong = []
+
+#     # Vòng lặp xử lý file
+#     for file_num in range(1, 62):
+#         file_key = f"page{file_num}.json"
+#         try:
+#             df_json = read_json_s3(file_key)
+#             for i in range(len(df_json[0]['data']) - 1):
+#                 item = df_json[0]['data'][i]
+                
+#                 # 1. Thông tin chung
+#                 df_tc = thongtinchung(item.get("thông tin chung", ""))
+#                 df_tc["Họ và tên"] = item.get("ten", "Unknown"); df_tc["STT người"] = i + 1; df_tc["File"] = file_key
+#                 all_df_thongtinchung.append(df_tc)
+                
+#                 # 2. Công trình khoa học
+#                 df_kh = caccongtrinhkhoahoc(item.get("cac cong trinh khoa hoc", ""))
+#                 df_kh["Họ và tên"] = item.get("ten", "Unknown"); df_kh["STT người"] = i + 1; df_kh["File"] = file_key
+#                 all_df_khoahoc.append(df_kh)
+                
+#                 # 3. Bài báo
+#                 df_bb = baibao(item.get("Bai Bao", ""))
+#                 df_bb["Họ và tên"] = item.get("ten", "Unknown"); df_bb["STT người"] = i + 1; df_bb["File"] = file_key
+#                 all_df_baibao.append(df_bb)
+                
+#                 # 4. Giảng dạy sau đại học
+#                 df_gd = giangdaysaudaihoc(item.get("Giang Day Sau Dai Hoc", ""))
+#                 df_gd["Họ và tên"] = item.get("ten", "Unknown"); df_gd["STT người"] = i + 1; df_gd["File"] = file_key
+#                 all_df_giangdaysaudaihoc.append(df_gd)
+                
+#                 # 5. Sách
+#                 df_sa = sach(item.get("Sach Va Giao Trinh", ""))
+#                 df_sa["Họ và tên"] = item.get("ten", "Unknown"); df_sa["STT người"] = i + 1; df_sa["File"] = file_key
+#                 all_df_sach.append(df_sa)
+                
+#                 # 6. Môn giảng dạy
+#                 df_mgd = mongiangday(item.get("Mon Giang Day", ""))
+#                 df_mgd["Họ và tên"] = item.get("ten", "Unknown"); df_mgd["STT người"] = i + 1; df_mgd["File"] = file_key
+#                 all_df_mongiangday.append(df_mgd)
+                
+#                 # 7. Giải thưởng
+#                 df_gt = giaithuong(item.get("Giai Thuong Va Phat Minh", ""))
+#                 df_gt["Họ và tên"] = item.get("ten", "Unknown"); df_gt["STT người"] = i + 1; df_gt["File"] = file_key
+#                 all_df_giaithuong.append(df_gt)
+                
+#                 # 8. Khen thưởng
+#                 df_kt = khenthuong(item.get("Khen Thuong", ""))
+#                 df_kt["Họ và tên"] = item.get("ten", "Unknown"); df_kt["STT người"] = i + 1; df_kt["File"] = file_key
+#                 all_df_khenthuong.append(df_kt)
+
+#         except Exception as e:
+#             print(f"Bỏ qua file {file_key} do lỗi: {e}")
+
+#     # Kết hợp dữ liệu và sinh ID (Helper function nội bộ)
+#     def finalize_and_merge(all_list, main_df):
+#         if not all_list: return pd.DataFrame()
+#         df_res = pd.concat(all_list, ignore_index=True)
+#         df_res = df_res.merge(main_df[['Họ và tên','Năm sinh','STT người','File']], on=['Họ và tên','STT người','File'], how='left')
+#         df_res["ID_giangvien"] = df_res.apply(tao_id_giangvien, axis=1)
+#         return df_res
+
+#     # Thực hiện merge và tạo DF final
+#     df_final_thongtinchung1 = pd.concat(all_df_thongtinchung, ignore_index=True)
+#     df_final_thongtinchung1["ID_giangvien"] = df_final_thongtinchung1.apply(tao_id_giangvien, axis=1)
+
+#     df_final_khoahoc1 = finalize_and_merge(all_df_khoahoc, df_final_thongtinchung1)
+#     df_final_baibao1 = finalize_and_merge(all_df_baibao, df_final_thongtinchung1)
+#     df_final_giangdaysaudaihoc1 = finalize_and_merge(all_df_giangdaysaudaihoc, df_final_thongtinchung1)
+#     df_final_sach1 = finalize_and_merge(all_df_sach, df_final_thongtinchung1)
+#     df_final_mongiangday1 = pd.concat(all_df_mongiangday, ignore_index=True)
+#     df_final_giaithuong1 = finalize_and_merge(all_df_giaithuong, df_final_thongtinchung1)
+#     df_final_khenthuong1 = finalize_and_merge(all_df_khenthuong, df_final_thongtinchung1)
+
+#     # Đánh ID cho các bảng con
+#     df_final_baibao1 = idcot(df_final_baibao1, "BB", "id_baibao")
+#     df_final_giaithuong1 = idcot(df_final_giaithuong1, "GT", "id_giaithuong")
+#     df_final_giangdaysaudaihoc1 = idcot(df_final_giangdaysaudaihoc1, "GD", "id_giangdaysdh")
+#     df_final_khenthuong1 = idcot(df_final_khenthuong1, "KT", "id_khenthuong")
+#     df_final_khoahoc1 = idcot(df_final_khoahoc1, "KH", "id_khoa_hoc")
+#     df_final_mongiangday1 = idcot(df_final_mongiangday1, "MGD", "id_mongiangday")
+#     df_final_sach1 = idcot(df_final_sach1, "SA", "id_sach")
+
+#     # ==========================================
+#     # LOGIC LÀM SẠCH DỮ LIỆU (REGEX REPLACE)
+#     # ==========================================
+#     # Xử lý df_final_thongtinchung1
+#     df_final_thongtinchung1["Tốt nghiệp ĐH chuyên ngành"] = df_final_thongtinchung1["Tốt nghiệp ĐH chuyên ngành"].str.replace(r'Tại\s*|[:;]', '', regex=True)
+#     df_final_thongtinchung1["Tại_ĐH"] = df_final_thongtinchung1["Tại_ĐH"].str.replace(r'Tại\s*|[:;]', '', regex=True)
+#     df_final_thongtinchung1["Tại_Học vị"] = df_final_thongtinchung1["Tại_Học vị"].str.replace(r'Chức danh.*', '', regex=True)
+#     df_final_thongtinchung1["Dạy CN"] = df_final_thongtinchung1["Dạy CN"].str.replace(r'^\s*-\s*', '', regex=True)
+
+#     # Loại bỏ dữ liệu rác dựa trên keywords
+#     for col in ["Ngoại ngữ", "Điện thoại", "Email", "Mobile"]:
+#         kw = "Đơn" if col == "Ngoại ngữ" else "Đăng"
+#         df_final_thongtinchung1.loc[df_final_thongtinchung1[col].str.contains(kw, case=False, na=False), col] = np.nan
+
+#     # Xử lý df_final_khoahoc1
+#     df_final_khoahoc1["Tên đề tài"] = df_final_khoahoc1["Tên đề tài"].str.replace(r'marria.*|Chủ nhiệm:.*', '', regex=True).str.replace(r'^\s*=-\s*', '', regex=True)
+#     df_final_khoahoc1.loc[df_final_khoahoc1["Tên đề tài"].str.contains("41 Lê", case=False, na=False), "Tên đề tài"] = np.nan
+#     df_final_khoahoc1["Chủ nhiệm"] = df_final_khoahoc1["Chủ nhiệm"].str.replace(r'[Tt]hành viên:.*|[Tt]hành viên chính.*:|Tham [Gg]ia.*|SV:.*', '', regex=True).str.replace(r',$|, $|;$|; $|: $|:$|- $|-$', '', regex=True)
+
+#     # Xử lý df_final_giangdaysaudaihoc1
+#     df_final_giangdaysaudaihoc1["Tên đề tài"] = df_final_giangdaysaudaihoc1["Tên đề tài"].str.replace(r'marri.*|unfait.*|cvs.*', '', regex=True)
+#     df_final_giangdaysaudaihoc1["Cơ sở đào tạo"] = df_final_giangdaysaudaihoc1["Cơ sở đào tạo"].str.replace(r'^- |^-', '', regex=True)
+
+#     # Xử lý df_final_mongiangday1
+#     bad_kw = r'marri.*|unfait.*|cvs.*|walgreen.*|abortion.*'
+#     df_final_mongiangday1["Đối tượng"] = df_final_mongiangday1["Đối tượng"].str.replace(bad_kw, '', regex=True)
+#     df_final_mongiangday1["Nơi dạy"] = df_final_mongiangday1["Nơi dạy"].str.replace(bad_kw, '', regex=True)
+
+#     # Áp dụng xoakhoangtrang cho tất cả
+#     dfs = [df_final_thongtinchung1, df_final_khoahoc1, df_final_baibao1, df_final_giaithuong1, 
+#            df_final_giangdaysaudaihoc1, df_final_khenthuong1, df_final_mongiangday1, df_final_sach1]
+    
+#     clean_dfs = [xoakhoangtrang(df) for df in dfs]
+
+#     # Lưu kết quả lên S3 Silver
+#     csv_names = ["df_final_thongtinchung1.csv", "df_final_khoahoc1.csv", "df_final_baibao1.csv", 
+#                  "df_final_giaithuong1.csv", "df_final_giangdaysaudaihoc1.csv", "df_final_khenthuong1.csv", 
+#                  "df_final_mongiangday1.csv", "df_final_sach1.csv"]
+    
+#     for df, name in zip(clean_dfs, csv_names):
+#         write_csv_s3(df, name)
+    
+#     print("Hoàn thành pipeline ETL!")
+
+# if __name__ == "__main__":
+#     main_etl()
